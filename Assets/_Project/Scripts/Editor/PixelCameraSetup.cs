@@ -12,8 +12,8 @@ namespace MurimAlliance.EditorTools
     public static class PixelCameraSetup
     {
         const int PixelsPerUnit = 32;
-        const int RefWidth = 640;
-        const int RefHeight = 360;
+        const int RefWidth = 480;
+        const int RefHeight = 270;
         const string TestSpritePath = "Assets/_Project/Art/Characters/_test_pixel.png";
 
         [MenuItem("Tools/천하무림맹/픽셀 카메라 설정")]

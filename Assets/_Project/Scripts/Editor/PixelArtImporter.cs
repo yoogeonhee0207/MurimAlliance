@@ -31,6 +31,16 @@ namespace MurimAlliance.EditorTools
             importer.textureCompression = TextureImporterCompression.Uncompressed;
             importer.mipmapEnabled = false;
             importer.alphaIsTransparency = true;
+
+            // 배경 타일은 반복해서 깔 수 있게 Full Rect + Repeat
+            if (assetPath.Contains("/Backgrounds/"))
+            {
+                var settings = new TextureImporterSettings();
+                importer.ReadTextureSettings(settings);
+                settings.spriteMeshType = SpriteMeshType.FullRect;
+                importer.SetTextureSettings(settings);
+                importer.wrapMode = TextureWrapMode.Repeat;
+            }
         }
     }
 }
