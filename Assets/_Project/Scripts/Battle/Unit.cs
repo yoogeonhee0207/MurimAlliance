@@ -67,6 +67,8 @@ namespace MurimAlliance.Battle
 
             if (!IsAlive) { UpdateDeath(dt); return; }
 
+            if (attackTimer > 0f) attackTimer -= dt;   // 공격 간격(대기 시간)은 항상 흐름
+
             if (brain == null) brain = GetComponent<UnitBrain>();
             if (brain != null) brain.Tick(this, dt);
             else Stop();
@@ -113,21 +115,28 @@ namespace MurimAlliance.Battle
         public bool InAttackRange(Unit t) =>
             t != null && (t.Position - Position).sqrMagnitude <= Data.range * Data.range;
 
+        /// <summary>공격 간격이 다 차서 바로 때릴 수 있는가.</summary>
+        public bool AttackReady => attackTimer <= 0f;
+
         /// <summary>사거리 안의 상대를 향해 멈춰 서서 공격 간격마다 공격한다. 매 프레임 부른다.</summary>
-        public void AttackTick(Unit t, float dt)
+        public void AttackTick(Unit t, float dt) => TryAttackOnce(t);
+
+        /// <summary>
+        /// 사거리 안의 상대를 향해 멈춰 서고, 공격 간격이 찼으면 한 대 때린다.
+        /// 때렸으면 true (간격이 아직이면 false).
+        /// </summary>
+        public bool TryAttackOnce(Unit t)
         {
-            if (!IsAlive || t == null || !t.IsAlive) return;
+            if (!IsAlive || t == null || !t.IsAlive) return false;
             velocity = Vector2.zero;
             State = UnitState.Attack;
             float dx = t.Position.x - Position.x;
             if (Mathf.Abs(dx) > 0.05f) body.flipX = dx < 0f;
 
-            attackTimer -= dt;
-            if (attackTimer <= 0f)
-            {
-                attackTimer = Data.attackInterval;
-                Attack(t);
-            }
+            if (attackTimer > 0f) return false;
+            attackTimer = Data.attackInterval;
+            Attack(t);
+            return true;
         }
 
         /// <summary>조건에 맞는 살아 있는 적 중 가장 가까운 유닛. maxDist 밖은 무시.</summary>
@@ -163,10 +172,26 @@ namespace MurimAlliance.Battle
         /// <summary>마지막으로 나를 때린 상대 (몬스터가 반격할 때 씀).</summary>
         public Unit LastAttacker { get; private set; }
 
+        /// <summary>마지막으로 피해를 받은 시각 (전투 밖 회복 판단용).</summary>
+        public float LastDamagedTime { get; private set; } = -999f;
+
+        public void ClearLastAttacker() => LastAttacker = null;
+
+        /// <summary>체력 회복 (최대 체력을 넘지 않음).</summary>
+        public void Heal(int amount)
+        {
+            if (!IsAlive || amount <= 0 || CurrentHp >= Data.maxHp) return;
+            CurrentHp = Mathf.Min(Data.maxHp, CurrentHp + amount);
+            hpBar.Set((float)CurrentHp / Data.maxHp);
+        }
+
+        public void RestoreFullHp() => Heal(Data.maxHp);
+
         public void TakeDamage(int dmg, bool crit, Unit attacker = null)
         {
             if (!IsAlive) return;
             if (attacker != null) LastAttacker = attacker;
+            LastDamagedTime = Time.time;
             CurrentHp = Mathf.Max(0, CurrentHp - dmg);
             hurtTimer = HurtFlash;
             hpBar.Set((float)CurrentHp / Data.maxHp);
@@ -186,22 +211,22 @@ namespace MurimAlliance.Battle
             Died?.Invoke(this);
         }
 
-        /// <summary>부활: 체력을 채우고 지정 위치에 다시 세운다.</summary>
-        public void Revive(Vector2 pos)
+        /// <summary>부활: 지정 위치에 다시 세우고 체력을 hpRatio만큼 채운다.</summary>
+        public void Revive(Vector2 pos, float hpRatio = 1f)
         {
             transform.position = pos;
             if (rb != null) { rb.position = pos; rb.linearVelocity = Vector2.zero; }
-            CurrentHp = Data.maxHp;
+            CurrentHp = Mathf.Max(1, Mathf.RoundToInt(Data.maxHp * Mathf.Clamp01(hpRatio)));
             State = UnitState.Idle;
             LastAttacker = null;
             attackTimer = Data.attackInterval * 0.5f;
             hpBar.gameObject.SetActive(true);
-            hpBar.Set(1f);
+            hpBar.Set((float)CurrentHp / Data.maxHp);
             body.color = Color.white;
             shadow.color = Color.white;
             var col = GetComponent<Collider2D>();
             if (col != null) col.enabled = true;
-            Debug.Log($"[Battle] {Data.displayName}({Team}) 부활");
+            Debug.Log($"[Battle] {Data.displayName}({Team}) 부활 (체력 {CurrentHp}/{Data.maxHp})");
         }
 
         // ---------- 연출 ----------

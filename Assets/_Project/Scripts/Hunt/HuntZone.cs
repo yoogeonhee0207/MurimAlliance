@@ -1,3 +1,4 @@
+using MurimAlliance.Data;
 using UnityEngine;
 
 namespace MurimAlliance.Hunt
@@ -13,6 +14,11 @@ namespace MurimAlliance.Hunt
 
         [Tooltip("구역 영역 (월드 좌표, 왼쪽 아래 x·y + 폭·높이)")]
         public Rect area = new Rect(0, 0, 15, 25);
+
+        [Header("몬스터 생성")]
+        [Tooltip("이 구역에 나오는 몬스터 (무작위로 고름)")] public UnitData[] monsters;
+        [Tooltip("이 구역에 동시에 있을 수 있는 최대 마릿수")] public int maxMonsters = 6;
+        [Tooltip("켜면 선공: 가까이 온 적을 먼저 공격")] public bool aggressive;
 
         [Tooltip("씬 화면에서 영역을 표시할 색")]
         public Color gizmoColor = new Color(1f, 0.8f, 0.2f, 1f);

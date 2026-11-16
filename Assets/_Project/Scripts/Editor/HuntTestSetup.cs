@@ -79,9 +79,12 @@ namespace MurimAlliance.EditorTools
             spawnGo.transform.SetParent(mapGo.transform);
             spawnGo.transform.position = Spawn;
             map.spawnPoint = spawnGo.transform;
-            map.zones.Add(Zone(mapGo.transform, "입구", 0, new Color(0.9f, 0.75f, 0.4f)));
-            map.zones.Add(Zone(mapGo.transform, "숲길", 1, new Color(0.5f, 0.9f, 0.4f)));
-            map.zones.Add(Zone(mapGo.transform, "깊은 숲", 2, new Color(0.3f, 0.6f, 0.9f)));
+            // 구역별 몬스터: 입구·숲길은 비선공, 깊은 숲은 선공 (원거리는 공격 방식 구현 뒤에 추가)
+            var bandit = LoadUnit("enemy_bandit");
+            var brute = LoadUnit("enemy_brute");
+            map.zones.Add(Zone(mapGo.transform, "입구", 0, new Color(0.9f, 0.75f, 0.4f), new[] { bandit }, 6, false));
+            map.zones.Add(Zone(mapGo.transform, "숲길", 1, new Color(0.5f, 0.9f, 0.4f), new[] { bandit, brute }, 8, false));
+            map.zones.Add(Zone(mapGo.transform, "깊은 숲", 2, new Color(0.3f, 0.6f, 0.9f), new[] { brute }, 8, true));
 
             // 장애물: 가장자리 숲(두께 1~3겹, 들쭉날쭉) + 안쪽에 흩어진 나무·바위
             var tree = LoadSprite("Backgrounds/ph_tree");
@@ -109,11 +112,14 @@ namespace MurimAlliance.EditorTools
             var follow = camGo.AddComponent<CameraFollow>();
             var spawner = new GameObject("HuntTestSpawner").AddComponent<HuntTestSpawner>();
             spawner.leaderData = LoadUnit("ally_wudang_swordsman");
-            spawner.dummyEnemy = LoadUnit("enemy_bandit");
-            spawner.dummyPositions = new[] { new Vector2(6f, 12.5f), new Vector2(7.5f, 14f), new Vector2(8f, 11f) };
             spawner.shadowNormal = LoadSprite("Effects/ph_shadow");
             spawner.shadowLarge = LoadSprite("Effects/ph_shadow_large");
             spawner.cameraFollow = follow;
+
+            // 구역별 몬스터 생성기
+            var monsterSpawner = mapGo.AddComponent<MonsterSpawner>();
+            monsterSpawner.shadowNormal = spawner.shadowNormal;
+            monsterSpawner.shadowLarge = spawner.shadowLarge;
 
             // 실행 전 화면도 맵 밖이 보이지 않게, 첫 프레임과 같은 위치(맵 경계 안)로 둔다
             float halfW = 480f / 32f / 2f, halfH = 270f / 32f / 2f;
@@ -121,6 +127,7 @@ namespace MurimAlliance.EditorTools
                 Mathf.Clamp(Spawn.x, halfW, MapW - halfW),
                 Mathf.Clamp(Spawn.y + follow.yOffset, halfH, MapH - halfH), -10);
             var ui = CreateJoystickUI();
+            spawner.attackButton = CreateAttackButton(ui);
             spawner.autoHuntButton = CreateAutoHuntButton(ui);
 
             EditorSceneManager.SaveScene(scene, ScenePath);
@@ -322,12 +329,72 @@ namespace MurimAlliance.EditorTools
             if (brain != null) brain.ToggleAutoHunt();
         }
 
+        [MenuItem("Tools/천하무림맹/테스트/공격 버튼 한 번")]
+        static void TestAttackOnce()
+        {
+            var brain = Object.FindAnyObjectByType<LeaderBrain>();
+            if (brain != null) brain.RequestAttack();
+        }
+
+        [MenuItem("Tools/천하무림맹/테스트/맹주를 가까운 적 옆으로")]
+        static void TestTeleportNearEnemy()
+        {
+            var brain = Object.FindAnyObjectByType<LeaderBrain>();
+            var unit = brain != null ? brain.GetComponent<MurimAlliance.Battle.Unit>() : null;
+            var enemy = unit != null ? unit.FindNearestEnemy() : null;
+            if (enemy == null) return;
+            Vector2 p = enemy.Position + new Vector2(-0.8f, 0f);
+            unit.transform.position = p;
+            var rb = unit.GetComponent<Rigidbody2D>();
+            if (rb != null) rb.position = p;
+            Debug.Log($"[HuntTest] 맹주를 {enemy.Data.displayName} 옆 {p}로 옮김");
+        }
+
+        static double spamStart;
+        static int spamPresses, spamHitsBefore;
+
+        [MenuItem("Tools/천하무림맹/테스트/공격 버튼 연타 (1.2초에 8번)")]
+        static void TestSpamAttack()
+        {
+            var brain = Object.FindAnyObjectByType<LeaderBrain>();
+            if (brain == null) return;
+            spamStart = EditorApplication.timeSinceStartup;
+            spamPresses = 0;
+            spamHitsBefore = brain.HitCount;
+            EditorApplication.update -= SpamUpdate;
+            EditorApplication.update += SpamUpdate;
+        }
+
+        static void SpamUpdate()
+        {
+            var brain = Object.FindAnyObjectByType<LeaderBrain>();
+            double t = EditorApplication.timeSinceStartup - spamStart;
+            if (brain == null || !Application.isPlaying) { EditorApplication.update -= SpamUpdate; return; }
+            while (spamPresses < 8 && t >= spamPresses * 0.15)
+            {
+                brain.RequestAttack();
+                spamPresses++;
+            }
+            if (t >= 1.6)   // 마지막 누름(1.05초) 뒤 여유를 두고 집계
+            {
+                EditorApplication.update -= SpamUpdate;
+                Debug.Log($"[HuntTest] 공격 버튼 8번 연타(1.2초) → 실제 공격 {brain.HitCount - spamHitsBefore}번");
+            }
+        }
+
         [MenuItem("Tools/천하무림맹/테스트/맹주 쓰러뜨리기")]
         static void TestKillLeader()
         {
             var brain = Object.FindAnyObjectByType<LeaderBrain>();
             var unit = brain != null ? brain.GetComponent<MurimAlliance.Battle.Unit>() : null;
             if (unit != null && unit.IsAlive) unit.TakeDamage(99999, false);
+        }
+
+        [MenuItem("Tools/천하무림맹/테스트/몬스터 수 출력")]
+        static void TestPrintMonsters()
+        {
+            var ms = Object.FindAnyObjectByType<MonsterSpawner>();
+            if (ms != null) Debug.Log($"[Hunt] 몬스터: {ms.Summary()}");
         }
 
         [MenuItem("Tools/천하무림맹/테스트/맹주 위치 출력")]
@@ -381,15 +448,53 @@ namespace MurimAlliance.EditorTools
             return canvasGo.transform;
         }
 
-        /// <summary>오른쪽 아래 자동사냥 버튼 (180x180, 화면 가장자리에서 60 안쪽).</summary>
+        // 오른쪽 아래 배치: 공격 버튼(240) 모서리, 자동 버튼(140)은 그 왼쪽 위
+        const float EdgeMargin = 50f, AttackSize = 240f, AutoSize = 140f;
+
+        /// <summary>오른쪽 아래 모서리의 큰 공격 버튼.</summary>
+        static AttackButton CreateAttackButton(Transform canvas)
+        {
+            var rt = new GameObject("AttackButton", typeof(RectTransform)).GetComponent<RectTransform>();
+            rt.SetParent(canvas, false);
+            rt.anchorMin = rt.anchorMax = rt.pivot = new Vector2(1f, 0f);
+            rt.anchoredPosition = new Vector2(-EdgeMargin, EdgeMargin);
+            rt.sizeDelta = new Vector2(AttackSize, AttackSize);
+            var bg = rt.gameObject.AddComponent<Image>();
+            bg.color = new Color(0.55f, 0.16f, 0.14f, 0.9f);
+            var text = UIText(rt, "공격", 64);
+
+            var btn = rt.gameObject.AddComponent<AttackButton>();
+            btn.background = bg;
+            return btn;
+        }
+
+        static Text UIText(RectTransform parent, string content, int size)
+        {
+            var textRt = new GameObject("Label", typeof(RectTransform)).GetComponent<RectTransform>();
+            textRt.SetParent(parent, false);
+            textRt.anchorMin = Vector2.zero; textRt.anchorMax = Vector2.one;
+            textRt.offsetMin = textRt.offsetMax = Vector2.zero;
+            var text = textRt.gameObject.AddComponent<Text>();
+            text.font = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");   // 임시 글꼴 (한글은 기기 글꼴로 대체 표시)
+            text.fontSize = size;
+            text.fontStyle = FontStyle.Bold;
+            text.alignment = TextAnchor.MiddleCenter;
+            text.raycastTarget = false;
+            text.color = new Color(0.95f, 0.92f, 0.85f);
+            text.text = content;
+            return text;
+        }
+
+        /// <summary>자동사냥 버튼: 공격 버튼의 왼쪽 위, 조금 작게.</summary>
         static AutoHuntButton CreateAutoHuntButton(Transform canvas)
         {
             var rt = new GameObject("AutoHuntButton", typeof(RectTransform)).GetComponent<RectTransform>();
             rt.SetParent(canvas, false);
             rt.anchorMin = rt.anchorMax = rt.pivot = new Vector2(1f, 0f);
-            rt.anchoredPosition = new Vector2(-60f, 60f);
-            rt.sizeDelta = new Vector2(180f, 180f);
+            rt.anchoredPosition = new Vector2(-(EdgeMargin + AttackSize + 20f), EdgeMargin + AttackSize - AutoSize * 0.5f);
+            rt.sizeDelta = new Vector2(AutoSize, AutoSize);
             var bg = rt.gameObject.AddComponent<Image>();
+            bg.color = new Color(0.12f, 0.12f, 0.14f, 0.75f);   // 꺼짐 색 (실행 전 화면도 같게)
             rt.gameObject.AddComponent<Button>().targetGraphic = bg;
 
             var textRt = new GameObject("Label", typeof(RectTransform)).GetComponent<RectTransform>();
@@ -398,11 +503,12 @@ namespace MurimAlliance.EditorTools
             textRt.offsetMin = textRt.offsetMax = Vector2.zero;
             var text = textRt.gameObject.AddComponent<Text>();
             text.font = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");   // 임시 글꼴 (한글은 기기 글꼴로 대체 표시)
-            text.fontSize = 44;
+            text.fontSize = 36;
             text.fontStyle = FontStyle.Bold;
             text.alignment = TextAnchor.MiddleCenter;
             text.raycastTarget = false;
             text.text = "자동\nOFF";
+            text.color = new Color(0.85f, 0.85f, 0.8f);
 
             var btn = rt.gameObject.AddComponent<AutoHuntButton>();
             btn.background = bg;
@@ -425,7 +531,8 @@ namespace MurimAlliance.EditorTools
 
         static int Order(float feetY) => Mathf.RoundToInt(-feetY * 100f);
 
-        static HuntZone Zone(Transform parent, string name, int index, Color color)
+        static HuntZone Zone(Transform parent, string name, int index, Color color,
+                             MurimAlliance.Data.UnitData[] monsters, int max, bool aggressive)
         {
             var go = new GameObject("Zone_" + name);
             go.transform.SetParent(parent);
@@ -433,6 +540,9 @@ namespace MurimAlliance.EditorTools
             z.zoneName = name;
             z.area = new Rect(index * ZoneW, 0, ZoneW, MapH);
             z.gizmoColor = color;
+            z.monsters = monsters;
+            z.maxMonsters = max;
+            z.aggressive = aggressive;
             return z;
         }
 
