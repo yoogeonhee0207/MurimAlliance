@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using MurimAlliance.Data;
 using UnityEngine;
@@ -8,9 +9,12 @@ namespace MurimAlliance.Battle
     public enum UnitState { Idle, Move, Attack, Dead }
 
     /// <summary>
-    /// 전투 유닛 한 명. 흐름: 대기 → 가장 가까운 적 찾기 → 사거리까지 이동 → 공격 → 피격 → 쓰러짐.
+    /// 전투 유닛 한 명: 능력치·체력·공격·피격·쓰러짐·연출을 맡는다.
+    /// "누구를 쫓고 언제 공격할지"는 같은 오브젝트의 UnitBrain(판단)이 정해서 Move / AttackTick을 부른다.
+    /// 기준점 = 발밑. 이동은 Rigidbody2D로 해서 장애물에 막히고 유닛끼리 살짝 밀어낸다.
     /// 현재는 공격 방식 중 "근접 단일"만 구현. 거리 단위는 칸(1칸 = 1 유닛 = 32px).
     /// </summary>
+    [RequireComponent(typeof(Rigidbody2D))]
     public class Unit : MonoBehaviour
     {
         public static readonly List<Unit> All = new List<Unit>();
@@ -20,11 +24,20 @@ namespace MurimAlliance.Battle
         public UnitState State { get; private set; } = UnitState.Idle;
         public int CurrentHp { get; private set; }
         public bool IsAlive => State != UnitState.Dead;
+        public Vector2 Position => transform.position;
+
+        /// <summary>쓰러지면 사라질지. 맹주처럼 부활하는 유닛은 false.</summary>
+        public bool destroyOnDeath = true;
+
+        /// <summary>쓰러진 순간 한 번 불린다.</summary>
+        public event Action<Unit> Died;
 
         SpriteRenderer body, shadow;
         HpBar hpBar;
-        Unit target;
-        float attackTimer, hurtTimer, lungeTimer, bobPhase, deathTimer;
+        Rigidbody2D rb;
+        UnitBrain brain;
+        Vector2 velocity;
+        float attackTimer, hurtTimer, lungeTimer, bobPhase, walkPhase, deathTimer;
         Vector3 bodyBase;
 
         const float HurtFlash = 0.12f, LungeTime = 0.15f, LungeDist = 0.25f, BobHeight = 0.03f, DeathFade = 0.6f;
@@ -35,13 +48,15 @@ namespace MurimAlliance.Battle
             Data = data; Team = team;
             body = bodyRenderer; shadow = shadowRenderer; hpBar = bar;
             bodyBase = body.transform.localPosition;
+            rb = GetComponent<Rigidbody2D>();
             CurrentHp = data.maxHp;
             attackTimer = data.attackInterval * 0.5f;   // 첫 공격은 간격의 절반 뒤
-            bobPhase = Random.value * Mathf.PI * 2f;
+            bobPhase = UnityEngine.Random.value * Mathf.PI * 2f;
             hpBar.Set(1f);
             body.flipX = team == Team.Enemy;           // 그림은 오른쪽을 봄. 적은 처음에 왼쪽을 보게
         }
 
+        void Awake() => brain = GetComponent<UnitBrain>();
         void OnEnable() => All.Add(this);
         void OnDisable() => All.Remove(this);
 
@@ -51,59 +66,107 @@ namespace MurimAlliance.Battle
             float dt = Time.deltaTime;
 
             if (!IsAlive) { UpdateDeath(dt); return; }
+
+            if (brain == null) brain = GetComponent<UnitBrain>();
+            if (brain != null) brain.Tick(this, dt);
+            else Stop();
+
             UpdateVisuals(dt);
+        }
 
-            if (target == null || !target.IsAlive) target = FindNearestEnemy();
-            if (target == null) { State = UnitState.Idle; return; }
+        void FixedUpdate()
+        {
+            if (rb == null) return;
+            rb.linearVelocity = IsAlive ? velocity : Vector2.zero;
+            // 멈춰 있거나 공격 중인 유닛은 무겁게: 걸어오는 유닛이 밀고 가지 못하고 비켜 가게 한다 (살짝만 밀림)
+            rb.mass = velocity.sqrMagnitude > 0.0001f ? MovingMass : StandingMass;
+        }
 
-            Vector3 to = target.transform.position - transform.position;
-            body.flipX = to.x < 0f;
+        const float MovingMass = 1f, StandingMass = 30f;
 
-            if (to.magnitude > Data.range)
+        // ---------- 판단(UnitBrain)이 부르는 동작 ----------
+
+        /// <summary>방향(길이 0~1)으로 이동. speed를 주지 않으면 데이터의 이동 속도.</summary>
+        public void Move(Vector2 dir, float speed = -1f)
+        {
+            if (!IsAlive) return;
+            if (speed < 0f) speed = Data.moveSpeed;
+            velocity = Vector2.ClampMagnitude(dir, 1f) * speed;
+            State = velocity.sqrMagnitude > 0.0001f ? UnitState.Move : UnitState.Idle;
+            if (Mathf.Abs(dir.x) > 0.05f) body.flipX = dir.x < 0f;
+        }
+
+        /// <summary>목표 지점으로 이동.</summary>
+        public void MoveTo(Vector2 point, float speed = -1f)
+        {
+            Vector2 to = point - Position;
+            Move(to.sqrMagnitude > 0.0025f ? to.normalized : Vector2.zero, speed);
+        }
+
+        public void Stop()
+        {
+            velocity = Vector2.zero;
+            if (IsAlive) State = UnitState.Idle;
+        }
+
+        /// <summary>상대가 사거리 안에 있는가 (발밑 사이 거리).</summary>
+        public bool InAttackRange(Unit t) =>
+            t != null && (t.Position - Position).sqrMagnitude <= Data.range * Data.range;
+
+        /// <summary>사거리 안의 상대를 향해 멈춰 서서 공격 간격마다 공격한다. 매 프레임 부른다.</summary>
+        public void AttackTick(Unit t, float dt)
+        {
+            if (!IsAlive || t == null || !t.IsAlive) return;
+            velocity = Vector2.zero;
+            State = UnitState.Attack;
+            float dx = t.Position.x - Position.x;
+            if (Mathf.Abs(dx) > 0.05f) body.flipX = dx < 0f;
+
+            attackTimer -= dt;
+            if (attackTimer <= 0f)
             {
-                State = UnitState.Move;
-                transform.position += to.normalized * (Data.moveSpeed * dt);
-            }
-            else
-            {
-                State = UnitState.Attack;
-                attackTimer -= dt;
-                if (attackTimer <= 0f)
-                {
-                    attackTimer = Data.attackInterval;
-                    Attack(target);
-                }
+                attackTimer = Data.attackInterval;
+                Attack(t);
             }
         }
 
-        Unit FindNearestEnemy()
+        /// <summary>조건에 맞는 살아 있는 적 중 가장 가까운 유닛. maxDist 밖은 무시.</summary>
+        public Unit FindNearestEnemy(float maxDist = float.MaxValue, Predicate<Unit> filter = null)
         {
-            Unit best = null; float bestDist = float.MaxValue;
+            Unit best = null;
+            float bestDist = maxDist * maxDist;
             foreach (var u in All)
             {
                 if (u == this || !u.IsAlive || u.Team == Team) continue;
-                float d = (u.transform.position - transform.position).sqrMagnitude;
+                if (filter != null && !filter(u)) continue;
+                float d = (u.Position - Position).sqrMagnitude;
                 if (d < bestDist) { bestDist = d; best = u; }
             }
             return best;
         }
 
+        // ---------- 공격·피격·쓰러짐 ----------
+
         void Attack(Unit t)
         {
             lungeTimer = LungeTime;
-            bool crit = Random.value < Data.critChance;
+            bool crit = UnityEngine.Random.value < Data.critChance;
             int dmg = CalcDamage(Data.attack, t.Data.defense);
             if (crit) dmg = Mathf.RoundToInt(dmg * Data.critMultiplier);
-            t.TakeDamage(dmg, crit);
+            t.TakeDamage(dmg, crit, this);
         }
 
         /// <summary>피해 = 공격력 × 100 ÷ (100 + 방어력), 최소 1. 방어력 100이면 피해가 절반.</summary>
         public static int CalcDamage(int attack, int defense) =>
             Mathf.Max(1, Mathf.RoundToInt(attack * 100f / (100f + defense)));
 
-        public void TakeDamage(int dmg, bool crit)
+        /// <summary>마지막으로 나를 때린 상대 (몬스터가 반격할 때 씀).</summary>
+        public Unit LastAttacker { get; private set; }
+
+        public void TakeDamage(int dmg, bool crit, Unit attacker = null)
         {
             if (!IsAlive) return;
+            if (attacker != null) LastAttacker = attacker;
             CurrentHp = Mathf.Max(0, CurrentHp - dmg);
             hurtTimer = HurtFlash;
             hpBar.Set((float)CurrentHp / Data.maxHp);
@@ -113,17 +176,51 @@ namespace MurimAlliance.Battle
         void Die()
         {
             State = UnitState.Dead;
+            velocity = Vector2.zero;
             deathTimer = DeathFade;
             hpBar.gameObject.SetActive(false);
             body.color = Color.white;
+            var col = GetComponent<Collider2D>();
+            if (col != null) col.enabled = false;      // 쓰러진 몸은 길을 막지 않음
             Debug.Log($"[Battle] {Data.displayName}({Team}) 쓰러짐");
+            Died?.Invoke(this);
         }
+
+        /// <summary>부활: 체력을 채우고 지정 위치에 다시 세운다.</summary>
+        public void Revive(Vector2 pos)
+        {
+            transform.position = pos;
+            if (rb != null) { rb.position = pos; rb.linearVelocity = Vector2.zero; }
+            CurrentHp = Data.maxHp;
+            State = UnitState.Idle;
+            LastAttacker = null;
+            attackTimer = Data.attackInterval * 0.5f;
+            hpBar.gameObject.SetActive(true);
+            hpBar.Set(1f);
+            body.color = Color.white;
+            shadow.color = Color.white;
+            var col = GetComponent<Collider2D>();
+            if (col != null) col.enabled = true;
+            Debug.Log($"[Battle] {Data.displayName}({Team}) 부활");
+        }
+
+        // ---------- 연출 ----------
 
         void UpdateVisuals(float dt)
         {
-            // 대기 중 위아래로 살짝 흔들림 + 공격할 때 앞으로 튀어나감
-            bobPhase += dt * 4f;
-            float bob = State == UnitState.Move ? 0f : Mathf.Sin(bobPhase) * BobHeight;
+            // 걷는 중: 1px 통통 / 서 있을 때: 위아래로 살짝 흔들림 / 공격: 앞으로 튀어나감
+            float bob;
+            if (State == UnitState.Move)
+            {
+                walkPhase += dt * 10f;
+                bob = Mathf.Abs(Mathf.Sin(walkPhase)) >= 0.5f ? 1f / 32f : 0f;
+            }
+            else
+            {
+                walkPhase = 0f;
+                bobPhase += dt * 4f;
+                bob = Mathf.Sin(bobPhase) * BobHeight;
+            }
             float lunge = 0f;
             if (lungeTimer > 0f)
             {
@@ -136,14 +233,14 @@ namespace MurimAlliance.Battle
             if (hurtTimer > 0f) hurtTimer -= dt;
             body.color = Color.Lerp(Color.white, HurtColor, Mathf.Clamp01(hurtTimer / HurtFlash));
 
-            // 아래쪽에 있는 유닛이 앞에 그려지게
-            int order = Mathf.RoundToInt(-transform.position.y * 100f);
-            body.sortingOrder = order;
-            shadow.sortingOrder = order - 1;
+            // 발이 아래쪽인 유닛이 앞에 그려지게 (나무·바위와 같은 규칙). 그림자는 바닥 바로 위.
+            body.sortingOrder = Mathf.RoundToInt(-transform.position.y * 100f);
+            shadow.sortingOrder = -31000;
         }
 
         void UpdateDeath(float dt)
         {
+            if (!destroyOnDeath) { body.color = new Color(1f, 1f, 1f, 0.35f); return; }
             deathTimer -= dt;
             float a = Mathf.Clamp01(deathTimer / DeathFade);
             body.color = new Color(1f, 1f, 1f, a);

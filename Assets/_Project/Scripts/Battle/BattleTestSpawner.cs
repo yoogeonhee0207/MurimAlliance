@@ -6,6 +6,7 @@ namespace MurimAlliance.Battle
 {
     /// <summary>
     /// 전투 테스트용. 시작하면 아군을 왼쪽, 적을 오른쪽에 세우고 결과를 Console에 남긴다.
+    /// 모든 유닛은 시험장 판단(ArenaBrain: 가장 가까운 적과 싸움)을 쓴다.
     /// </summary>
     public class BattleTestSpawner : MonoBehaviour
     {
@@ -29,7 +30,8 @@ namespace MurimAlliance.Battle
             for (int i = 0; i < list.Length; i++)
             {
                 float y = (i - (list.Length - 1) * 0.5f) * spacingY;
-                UnitFactory.Spawn(list[i], team, new Vector2(x, y), shadowNormal, shadowLarge);
+                var u = UnitFactory.Spawn(list[i], team, new Vector2(x, y), shadowNormal, shadowLarge);
+                u.gameObject.AddComponent<ArenaBrain>();
             }
         }
 

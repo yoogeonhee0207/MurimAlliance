@@ -100,18 +100,21 @@ namespace MurimAlliance.EditorTools
                 Scatter(obstacles, rock, z, rocksPerZone[z], false, rnd, placed);
             }
 
-            // 맹주 (임시로 무당 검객 그림) + 카메라 따라가기 + 조이스틱 UI
-            var leader = CreateLeader();
-            if (leader != null)
-            {
-                var follow = camGo.AddComponent<CameraFollow>();
-                follow.target = leader.transform;
-                // 실행 전 화면도 맵 밖이 보이지 않게, 첫 프레임과 같은 위치(맵 경계 안)로 둔다
-                float halfW = 480f / 32f / 2f, halfH = 270f / 32f / 2f;
-                camGo.transform.position = new Vector3(
-                    Mathf.Clamp(Spawn.x, halfW, MapW - halfW),
-                    Mathf.Clamp(Spawn.y + follow.yOffset, halfH, MapH - halfH), -10);
-            }
+            // 맹주는 실행 중에 생성기가 만든다 (Unit 내부 값은 씬에 저장되지 않음). 카메라는 맹주를 따라감.
+            var follow = camGo.AddComponent<CameraFollow>();
+            var spawner = new GameObject("HuntTestSpawner").AddComponent<HuntTestSpawner>();
+            spawner.leaderData = LoadUnit("ally_wudang_swordsman");
+            spawner.dummyEnemy = LoadUnit("enemy_bandit");
+            spawner.dummyPositions = new[] { new Vector2(6f, 12.5f), new Vector2(7.5f, 14f), new Vector2(8f, 11f) };
+            spawner.shadowNormal = LoadSprite("Effects/ph_shadow");
+            spawner.shadowLarge = LoadSprite("Effects/ph_shadow_large");
+            spawner.cameraFollow = follow;
+
+            // 실행 전 화면도 맵 밖이 보이지 않게, 첫 프레임과 같은 위치(맵 경계 안)로 둔다
+            float halfW = 480f / 32f / 2f, halfH = 270f / 32f / 2f;
+            camGo.transform.position = new Vector3(
+                Mathf.Clamp(Spawn.x, halfW, MapW - halfW),
+                Mathf.Clamp(Spawn.y + follow.yOffset, halfH, MapH - halfH), -10);
             CreateJoystickUI();
 
             EditorSceneManager.SaveScene(scene, ScenePath);
@@ -300,61 +303,22 @@ namespace MurimAlliance.EditorTools
                 Debug.LogWarning("[HuntTest] 플레이 중에만 쓸 수 있습니다.");
                 return;
             }
-            LeaderController.DebugInput = dir;
-            LeaderController.DebugUntil = Time.time + seconds;
-            var leader = Object.FindAnyObjectByType<LeaderController>();
+            LeaderBrain.DebugInput = dir;
+            LeaderBrain.DebugUntil = Time.time + seconds;
+            var leader = Object.FindAnyObjectByType<LeaderBrain>();
             Debug.Log($"[HuntTest] 테스트 이동 {dir} {seconds}초 시작, 맹주 위치 {(leader != null ? (Vector2)leader.transform.position : Vector2.zero)}");
         }
 
         [MenuItem("Tools/천하무림맹/테스트/맹주 위치 출력")]
         static void TestPrintPosition()
         {
-            var leader = Object.FindAnyObjectByType<LeaderController>();
+            var leader = Object.FindAnyObjectByType<LeaderBrain>();
             var cam = Camera.main;
             if (leader == null) return;
             Debug.Log($"[HuntTest] 맹주 {(Vector2)leader.transform.position}, 카메라 {(cam != null ? (Vector2)cam.transform.position : Vector2.zero)}");
         }
 
         // ---------- 맹주·조이스틱 ----------
-
-        /// <summary>맹주: 루트 = 발밑(Rigidbody2D + 발 충돌), 자식 Body(그림)·Shadow(그림자).</summary>
-        static LeaderController CreateLeader()
-        {
-            var hero = LoadSprite("Characters/ph_wudang_swordsman");
-            var shadow = LoadSprite("Effects/ph_shadow");
-            if (hero == null) return null;
-
-            var go = new GameObject("Leader");
-            go.transform.position = Spawn;
-
-            var rb = go.AddComponent<Rigidbody2D>();
-            rb.gravityScale = 0f;
-            rb.freezeRotation = true;
-            rb.interpolation = RigidbodyInterpolation2D.Interpolate;
-            rb.collisionDetectionMode = CollisionDetectionMode2D.Continuous;
-            var col = go.AddComponent<CircleCollider2D>();
-            col.radius = 0.22f;
-            col.offset = new Vector2(0, 0.1f);
-
-            var body = new GameObject("Body").AddComponent<SpriteRenderer>();
-            body.transform.SetParent(go.transform, false);
-            body.transform.localPosition = new Vector3(0, hero.bounds.size.y / 2f - 0.1f, 0);
-            body.sprite = hero;
-            body.sortingOrder = Order(Spawn.y);
-
-            if (shadow != null)
-            {
-                var s = new GameObject("Shadow").AddComponent<SpriteRenderer>();
-                s.transform.SetParent(go.transform, false);
-                s.transform.localPosition = new Vector3(0, 0.02f, 0);
-                s.sprite = shadow;
-                s.sortingOrder = -31000;    // 바닥 바로 위, 모든 캐릭터·나무보다 뒤
-            }
-
-            var lc = go.AddComponent<LeaderController>();
-            lc.body = body;
-            return lc;
-        }
 
         /// <summary>화면 UI: 왼쪽 절반 전체가 플로팅 조이스틱 영역. UI는 실제 화면 해상도로 그린다.</summary>
         static void CreateJoystickUI()
@@ -485,6 +449,13 @@ namespace MurimAlliance.EditorTools
             EditorUtility.SetDirty(tile);
             AssetDatabase.SaveAssets();
             return tile;
+        }
+
+        static MurimAlliance.Data.UnitData LoadUnit(string name)
+        {
+            var d = AssetDatabase.LoadAssetAtPath<MurimAlliance.Data.UnitData>($"Assets/_Project/Data/Units/{name}.asset");
+            if (d == null) Debug.LogError($"[HuntTest] 유닛 데이터 없음: {name}");
+            return d;
         }
 
         static Sprite LoadSprite(string path)
