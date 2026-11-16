@@ -32,6 +32,11 @@ namespace MurimAlliance.EditorTools
         [MenuItem("Tools/천하무림맹/사냥터 테스트 씬")]
         public static void CreateHuntScene()
         {
+            if (Application.isPlaying)
+            {
+                Debug.LogWarning("[HuntTest] 플레이 중에는 씬을 만들 수 없습니다. 플레이를 멈춘 뒤 다시 실행하세요.");
+                return;
+            }
             // 주의: 타일은 새 씬을 만든 "뒤에" 불러온다. 먼저 불러오면 NewScene이 쓰지 않는 에셋을
             // 메모리에서 내리면서 참조가 비어 SetTile이 아무것도 깔지 않는다.
             var scene = EditorSceneManager.NewScene(NewSceneSetup.EmptyScene, NewSceneMode.Single);
@@ -115,7 +120,8 @@ namespace MurimAlliance.EditorTools
             camGo.transform.position = new Vector3(
                 Mathf.Clamp(Spawn.x, halfW, MapW - halfW),
                 Mathf.Clamp(Spawn.y + follow.yOffset, halfH, MapH - halfH), -10);
-            CreateJoystickUI();
+            var ui = CreateJoystickUI();
+            spawner.autoHuntButton = CreateAutoHuntButton(ui);
 
             EditorSceneManager.SaveScene(scene, ScenePath);
             int tiles = ground.GetUsedTilesCount() > 0 ? ground.GetTilesBlock(ground.cellBounds).Length : 0;
@@ -309,6 +315,21 @@ namespace MurimAlliance.EditorTools
             Debug.Log($"[HuntTest] 테스트 이동 {dir} {seconds}초 시작, 맹주 위치 {(leader != null ? (Vector2)leader.transform.position : Vector2.zero)}");
         }
 
+        [MenuItem("Tools/천하무림맹/테스트/자동사냥 켜기·끄기")]
+        static void TestToggleAuto()
+        {
+            var brain = Object.FindAnyObjectByType<LeaderBrain>();
+            if (brain != null) brain.ToggleAutoHunt();
+        }
+
+        [MenuItem("Tools/천하무림맹/테스트/맹주 쓰러뜨리기")]
+        static void TestKillLeader()
+        {
+            var brain = Object.FindAnyObjectByType<LeaderBrain>();
+            var unit = brain != null ? brain.GetComponent<MurimAlliance.Battle.Unit>() : null;
+            if (unit != null && unit.IsAlive) unit.TakeDamage(99999, false);
+        }
+
         [MenuItem("Tools/천하무림맹/테스트/맹주 위치 출력")]
         static void TestPrintPosition()
         {
@@ -321,7 +342,7 @@ namespace MurimAlliance.EditorTools
         // ---------- 맹주·조이스틱 ----------
 
         /// <summary>화면 UI: 왼쪽 절반 전체가 플로팅 조이스틱 영역. UI는 실제 화면 해상도로 그린다.</summary>
-        static void CreateJoystickUI()
+        static Transform CreateJoystickUI()
         {
             var canvasGo = new GameObject("UI");
             var canvas = canvasGo.AddComponent<Canvas>();
@@ -357,6 +378,36 @@ namespace MurimAlliance.EditorTools
             var es = new GameObject("EventSystem");
             es.AddComponent<EventSystem>();
             es.AddComponent<InputSystemUIInputModule>();
+            return canvasGo.transform;
+        }
+
+        /// <summary>오른쪽 아래 자동사냥 버튼 (180x180, 화면 가장자리에서 60 안쪽).</summary>
+        static AutoHuntButton CreateAutoHuntButton(Transform canvas)
+        {
+            var rt = new GameObject("AutoHuntButton", typeof(RectTransform)).GetComponent<RectTransform>();
+            rt.SetParent(canvas, false);
+            rt.anchorMin = rt.anchorMax = rt.pivot = new Vector2(1f, 0f);
+            rt.anchoredPosition = new Vector2(-60f, 60f);
+            rt.sizeDelta = new Vector2(180f, 180f);
+            var bg = rt.gameObject.AddComponent<Image>();
+            rt.gameObject.AddComponent<Button>().targetGraphic = bg;
+
+            var textRt = new GameObject("Label", typeof(RectTransform)).GetComponent<RectTransform>();
+            textRt.SetParent(rt, false);
+            textRt.anchorMin = Vector2.zero; textRt.anchorMax = Vector2.one;
+            textRt.offsetMin = textRt.offsetMax = Vector2.zero;
+            var text = textRt.gameObject.AddComponent<Text>();
+            text.font = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");   // 임시 글꼴 (한글은 기기 글꼴로 대체 표시)
+            text.fontSize = 44;
+            text.fontStyle = FontStyle.Bold;
+            text.alignment = TextAnchor.MiddleCenter;
+            text.raycastTarget = false;
+            text.text = "자동\nOFF";
+
+            var btn = rt.gameObject.AddComponent<AutoHuntButton>();
+            btn.background = bg;
+            btn.label = text;
+            return btn;
         }
 
         // 원 그림은 VirtualJoystick이 실행 시작 때 만든다 (에디터에서 만든 그림은 씬에 저장되지 않음)

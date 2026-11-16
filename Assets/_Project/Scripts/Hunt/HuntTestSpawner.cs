@@ -14,6 +14,7 @@ namespace MurimAlliance.Hunt
         public UnitData leaderData;
         public Sprite shadowNormal, shadowLarge;
         public CameraFollow cameraFollow;
+        public AutoHuntButton autoHuntButton;
 
         [Header("시험용 적 (가만히 서 있음)")]
         public UnitData dummyEnemy;
@@ -29,8 +30,9 @@ namespace MurimAlliance.Hunt
             Leader = UnitFactory.Spawn(leaderData, Team.Ally, spawn, shadowNormal, shadowLarge);
             Leader.name = "Leader";
             Leader.destroyOnDeath = false;
-            Leader.gameObject.AddComponent<LeaderBrain>();
+            var brain = Leader.gameObject.AddComponent<LeaderBrain>();
             if (cameraFollow != null) cameraFollow.target = Leader.transform;
+            if (autoHuntButton != null) autoHuntButton.Bind(brain);
 
             if (dummyEnemy != null && dummyPositions != null)
                 foreach (var p in dummyPositions)
