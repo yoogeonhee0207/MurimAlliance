@@ -22,7 +22,7 @@ MonoBehaviour:
   isBoss: 0
   maxHp: 130
   attack: 6
-  defense: 3
+  defense: 5
   attackInterval: 1.5
   range: 4
   moveSpeed: 1

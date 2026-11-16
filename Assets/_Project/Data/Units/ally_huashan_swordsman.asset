@@ -21,8 +21,8 @@ MonoBehaviour:
   shadowSize: 0
   isBoss: 0
   maxHp: 160
-  attack: 28
-  defense: 4
+  attack: 24
+  defense: 10
   attackInterval: 0.9
   range: 1
   moveSpeed: 1.6

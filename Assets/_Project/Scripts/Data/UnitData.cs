@@ -23,7 +23,7 @@ namespace MurimAlliance.Data
         [Header("전투 수치")]
         [Min(1)] public int maxHp = 100;
         [Min(0)] public int attack = 10;
-        [Tooltip("받는 피해를 줄인다")][Min(0)] public int defense = 0;
+        [Tooltip("받는 피해 = 공격력 × 100 ÷ (100 + 방어력). 100이면 피해 절반")][Min(0)] public int defense = 0;
         [Tooltip("몇 초마다 한 번 공격하는지")][Min(0.1f)] public float attackInterval = 1f;
         [Tooltip("몇 칸 앞까지 공격하는지")][Min(0.5f)] public float range = 1f;
         [Tooltip("1초에 몇 칸 움직이는지")][Min(0f)] public float moveSpeed = 1f;

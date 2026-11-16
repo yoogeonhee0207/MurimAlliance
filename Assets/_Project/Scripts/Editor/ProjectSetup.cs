@@ -36,6 +36,9 @@ namespace MurimAlliance.EditorTools
             PlayerSettings.SetScriptingBackend(NamedBuildTarget.Android, ScriptingImplementation.IL2CPP);
             PlayerSettings.Android.targetArchitectures = AndroidArchitecture.ARM64;
 
+            // 에디터에서 Unity 창이 뒤에 있어도 Play가 멈추지 않게 (안드로이드에서는 무시되는 설정)
+            PlayerSettings.runInBackground = true;
+
             AssetDatabase.SaveAssets();
             Debug.Log($"[ProjectSetup] Player Settings 적용 완료: {ProductName} / {PackageName} / v{Version}");
         }

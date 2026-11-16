@@ -8,7 +8,8 @@ namespace MurimAlliance.EditorTools
     /// <summary>
     /// 임시 유닛 데이터(아군 6, 적 4)를 만든다. 이미 있는 파일은 덮어쓰지 않는다.
     /// 메뉴: Tools > 천하무림맹 > 임시 유닛 데이터 생성
-    /// 수치는 전투 시제품용 임시값이며 밸런스 작업 때 다시 정한다.
+    /// 아군 수치는 "전투력 지수 = √(초당 피해 × 유효 체력)" 기준으로 맞춘 지급 1레벨 값
+    /// (근접 ≈70, 원거리·범위 ≈55, 의원은 회복 20/초). 적 수치와 보스는 스테이지 모델에서 다시 정한다.
     /// </summary>
     public static class UnitDataSeeder
     {
@@ -21,29 +22,29 @@ namespace MurimAlliance.EditorTools
             int made = 0;
             // 아군 (이름, 파일, 문파, 역할, 성격, 등급, 그림, 체력, 공격, 방어, 간격, 사거리, 이동, 치명, 공격방식)
             made += Make("ally_shaolin_brawler", "소림 권사", Faction.Shaolin, Role.Brawler, Personality.Ironwall, Grade.Ji,
-                "Characters/ph_shaolin_brawler", 300, 12, 10, 1.2f, 1f, 1.2f, 0.05f, AttackType.MeleeSingle);
+                "Characters/ph_shaolin_brawler", 280, 14, 30, 1.2f, 1f, 1.2f, 0.05f, AttackType.MeleeSingle);
             made += Make("ally_huashan_swordsman", "화산 검객", Faction.Huashan, Role.Swordsman, Personality.SwiftSword, Grade.Ji,
-                "Characters/ph_huashan_swordsman", 160, 28, 4, 0.9f, 1f, 1.6f, 0.15f, AttackType.MeleeSingle, critMul: 1.8f);
+                "Characters/ph_huashan_swordsman", 160, 24, 10, 0.9f, 1f, 1.6f, 0.15f, AttackType.MeleeSingle, critMul: 1.8f);
             made += Make("ally_wudang_swordsman", "무당 검객", Faction.Wudang, Role.Swordsman, Personality.None, Grade.Ji,
-                "Characters/ph_wudang_swordsman", 180, 22, 6, 1.0f, 1f, 1.5f, 0.10f, AttackType.MeleeSingle);
+                "Characters/ph_wudang_swordsman", 200, 20, 15, 1.0f, 1f, 1.5f, 0.10f, AttackType.MeleeSingle);
             made += Make("ally_wudang_taoist", "무당 도사", Faction.Wudang, Role.Taoist, Personality.None, Grade.Ji,
-                "Characters/ph_wudang_taoist", 140, 14, 3, 1.8f, 3.5f, 1.0f, 0.05f, AttackType.FormationArea,
-                area: 1.5f, shield: 40);
+                "Characters/ph_wudang_taoist", 140, 12, 5, 1.8f, 3.5f, 1.0f, 0.05f, AttackType.FormationArea,
+                area: 1.5f, shield: 30);
             made += Make("ally_tang_assassin", "당문 암기술사", Faction.Tang, Role.Assassin, Personality.None, Grade.Ji,
-                "Characters/ph_tang_assassin", 120, 8, 2, 1.0f, 4.5f, 1.1f, 0.10f, AttackType.RangedPoison,
-                poisonDps: 6, poisonDur: 4f);
+                "Characters/ph_tang_assassin", 120, 8, 5, 1.0f, 4.5f, 1.1f, 0.10f, AttackType.RangedPoison,
+                poisonDps: 8, poisonDur: 4f);
             made += Make("ally_tang_healer", "당문 의원", Faction.Tang, Role.Healer, Personality.None, Grade.Ji,
-                "Characters/ph_tang_healer", 130, 6, 3, 1.5f, 4f, 1.0f, 0f, AttackType.Heal, heal: 30);
+                "Characters/ph_tang_healer", 130, 6, 5, 1.5f, 4f, 1.0f, 0f, AttackType.Heal, heal: 30);
 
             // 적
             made += Make("enemy_bandit", "산적", Faction.None, Role.None, Personality.None, Grade.In,
-                "Enemies/ph_enemy_bandit", 120, 10, 2, 1.2f, 1f, 1.3f, 0.05f, AttackType.MeleeSingle);
+                "Enemies/ph_enemy_bandit", 120, 10, 5, 1.2f, 1f, 1.3f, 0.05f, AttackType.MeleeSingle);
             made += Make("enemy_archer", "산적 궁수", Faction.None, Role.None, Personality.None, Grade.In,
-                "Enemies/ph_enemy_archer", 80, 9, 1, 1.5f, 4.5f, 1.2f, 0.05f, AttackType.Ranged);
+                "Enemies/ph_enemy_archer", 80, 9, 0, 1.5f, 4.5f, 1.2f, 0.05f, AttackType.Ranged);
             made += Make("enemy_brute", "거한", Faction.None, Role.None, Personality.None, Grade.In,
-                "Enemies/ph_enemy_brute", 260, 14, 8, 1.6f, 1f, 0.9f, 0.05f, AttackType.MeleeSingle);
+                "Enemies/ph_enemy_brute", 260, 14, 25, 1.6f, 1f, 0.9f, 0.05f, AttackType.MeleeSingle);
             made += Make("boss_bandit_chief", "녹림 두목", Faction.None, Role.None, Personality.None, Grade.In,
-                "Enemies/ph_boss_bandit_chief", 1500, 30, 10, 1.4f, 1.2f, 1.0f, 0.10f, AttackType.MeleeArea,
+                "Enemies/ph_boss_bandit_chief", 1500, 30, 60, 1.4f, 1.2f, 1.0f, 0.10f, AttackType.MeleeArea,
                 area: 1.2f, boss: true);
 
             AssetDatabase.SaveAssets();

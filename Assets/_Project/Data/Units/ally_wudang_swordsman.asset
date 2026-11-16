@@ -20,9 +20,9 @@ MonoBehaviour:
   sprite: {fileID: 21300000, guid: 3a0be0a22a73a423294623f9d8e83ad9, type: 3}
   shadowSize: 0
   isBoss: 0
-  maxHp: 180
-  attack: 22
-  defense: 6
+  maxHp: 200
+  attack: 20
+  defense: 15
   attackInterval: 1
   range: 1
   moveSpeed: 1.5

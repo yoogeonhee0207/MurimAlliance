@@ -22,7 +22,7 @@ MonoBehaviour:
   isBoss: 0
   maxHp: 120
   attack: 8
-  defense: 2
+  defense: 5
   attackInterval: 1
   range: 4.5
   moveSpeed: 1.1
@@ -30,7 +30,7 @@ MonoBehaviour:
   critMultiplier: 1.5
   attackType: 3
   areaRadius: 0
-  poisonDamagePerSecond: 6
+  poisonDamagePerSecond: 8
   poisonDuration: 4
   healAmount: 0
   shieldAmount: 0
