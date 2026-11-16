@@ -1,0 +1,37 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 9aa0a6417debe45a6b1d546b657ca52c, type: 3}
+  m_Name: ally_shaolin_brawler
+  m_EditorClassIdentifier: Assembly-CSharp::MurimAlliance.Data.UnitData
+  displayName: "\uC18C\uB9BC \uAD8C\uC0AC"
+  faction: 1
+  role: 1
+  personality: 1
+  grade: 1
+  sprite: {fileID: 21300000, guid: 536f260e4495d48ce92a8fb58ab43341, type: 3}
+  shadowSize: 0
+  isBoss: 0
+  maxHp: 300
+  attack: 12
+  defense: 10
+  attackInterval: 1.2
+  range: 1
+  moveSpeed: 1.2
+  critChance: 0.05
+  critMultiplier: 1.5
+  attackType: 0
+  areaRadius: 0
+  poisonDamagePerSecond: 0
+  poisonDuration: 0
+  healAmount: 0
+  shieldAmount: 0
+  counterChance: 0

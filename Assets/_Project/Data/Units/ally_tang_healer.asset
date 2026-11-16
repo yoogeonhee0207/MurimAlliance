@@ -1,0 +1,37 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 9aa0a6417debe45a6b1d546b657ca52c, type: 3}
+  m_Name: ally_tang_healer
+  m_EditorClassIdentifier: Assembly-CSharp::MurimAlliance.Data.UnitData
+  displayName: "\uB2F9\uBB38 \uC758\uC6D0"
+  faction: 4
+  role: 5
+  personality: 0
+  grade: 1
+  sprite: {fileID: 21300000, guid: 04d7c81dc23684499bad34f4b64ea0bc, type: 3}
+  shadowSize: 0
+  isBoss: 0
+  maxHp: 130
+  attack: 6
+  defense: 3
+  attackInterval: 1.5
+  range: 4
+  moveSpeed: 1
+  critChance: 0
+  critMultiplier: 1.5
+  attackType: 4
+  areaRadius: 0
+  poisonDamagePerSecond: 0
+  poisonDuration: 0
+  healAmount: 30
+  shieldAmount: 0
+  counterChance: 0
